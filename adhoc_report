@@ -1,0 +1,84 @@
+import pandas as pd 
+import numpy as np 
+import os 
+import pyodbc 
+import smtplib
+from datetime import datetime 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
+#connect to database 
+DB = pyodbc.connect('DSN=ProvideX_UPS;DRIVER={PxPlus ODBC Driver}', autocommit=True)
+cursor = DB.cursor()
+
+sql = '''
+select * from "oropna - Order Allocated Qtys" where ORAD_QAL_1 > 0  ORDER BY ORA_CHGDTE DESC
+'''
+cursor.execute(sql)
+
+
+#get all tables 
+for row in cursor.tables(tableType='TABLE'): 
+    print(row)
+
+#convert sql dataframe to get table 
+pd.set_option('display.max.columns', 84)
+df = pd.read_sql(sql, DB)
+df.head(10)
+#convert to files
+
+def OrderAllocations_generators(): 
+    path = r'C:\Users\david.han\Desktop\Order_Allocations'
+    new_update = os.path.join(path, 'Order_Allocations_Qty.xlsx')
+    output_file = df.to_excel(new_update)
+    return output_file
+
+OrderAllocations_generators() 
+
+#send email 
+
+def send_email(): 
+    fromaddr = "David.han@barcouniforms.com"
+    toaddr = "David.han@barcouniforms.com,Paul.luk@barcouniforms.com"
+    cc = "David.Han@barcouniforms.com"
+
+    #more than one part listing
+    msg = MIMEMultipart()
+
+    msg['From'] = fromaddr
+    msg['To'] = toaddr
+    msg['Cc'] = cc
+    msg['Subject'] = "Order Allocation Qty Status Report"
+
+    body = "Please see attachments for Daily Report on Order Allocation Qtys - Every two hours - {}".format(datetime.date(datetime.now()))
+
+    msg.attach(MIMEText(body, 'plain'))
+#add path on where file is located
+    filename = "Order_Allocations_Qty.xlsx"
+    path = r'C:/Users/david.han/Desktop/Order_Allocations_Folder/' + filename
+    attachment = open(path, "rb")   
+
+    part = MIMEBase('application', 'octet-stream')
+    part.set_payload((attachment).read())
+    encoders.encode_base64(part)
+    part.add_header('Content-Disposition', "attachment; filename= %s" % filename)
+
+    msg.attach(part)
+
+    #connect to outlook server
+    try:
+        server = smtplib.SMTP('smtp.outlook.com', 587)
+        server.starttls()
+        server.login(<insert outlook email', 'insert password')
+        text = msg.as_string()
+        server.sendmail(fromaddr, toaddr.split(","), text)
+    except Exception as e: 
+        print('Couldnt connect to outlook server')
+    finally: 
+        server.quit() 
+
+send_email()
+
+
